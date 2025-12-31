@@ -4,18 +4,51 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// Audio elements
+const explosionSound = document.getElementById('explosionSound');
+const fireworkLaunchSound = document.getElementById('fireworkLaunchSound');
+const countdownSound = document.getElementById('countdownSound');
+
+// State variables
 let fireworks = [];
 let particles = [];
 let autoFireworks = true;
 let midnightMode = false;
-let userCountry = '';
-let userTimeZone = '';
-let nextMidnightCountry = '';
-let nextMidnightTime = null;
+let soundEnabled = true;
 let currentTheme = 0;
 let megaShowActive = false;
+let animationId = null;
 
-// Country data with timezones and flags
+// Themes with proper backgrounds and colors
+const themes = [
+    { 
+        name: "Midnight Blue",
+        bg: ['#000428', '#004e92'], 
+        particleColors: ['#FFD700', '#FF8C00', '#FF1493', '#00BFFF', '#FF00FF', '#00FF00']
+    },
+    { 
+        name: "Purple Galaxy",
+        bg: ['#0f0c29', '#302b63', '#24243e'], 
+        particleColors: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#FF9A8B', '#9D4EDD', '#FF9E00']
+    },
+    { 
+        name: "Dark Gray",
+        bg: ['#232526', '#414345'], 
+        particleColors: ['#FF4081', '#7C4DFF', '#18FFFF', '#64FFDA', '#FFEB3B', '#E91E63']
+    },
+    { 
+        name: "Deep Ocean",
+        bg: ['#141E30', '#243B55'], 
+        particleColors: ['#FF5252', '#FFD740', '#69F0AE', '#448AFF', '#FF80AB', '#00E5FF']
+    },
+    { 
+        name: "Sunset",
+        bg: ['#8A2387', '#E94057', '#F27121'], 
+        particleColors: ['#FF0000', '#FF9500', '#FFEA00', '#00FF88', '#00D4FF', '#FF00FF']
+    }
+];
+
+// Country data
 const countries = [
     { name: "New Zealand", city: "Auckland", timezone: "Pacific/Auckland", flag: "🇳🇿", offset: 13 },
     { name: "Australia", city: "Sydney", timezone: "Australia/Sydney", flag: "🇦🇺", offset: 11 },
@@ -32,33 +65,35 @@ const countries = [
     { name: "USA", city: "Los Angeles", timezone: "America/Los_Angeles", flag: "🇺🇸", offset: -8 }
 ];
 
-const themes = [
-    { bg: ['#000428', '#004e92'], particleColors: ['#FFD700', '#FF8C00', '#FF1493', '#00BFFF'] },
-    { bg: ['#0f0c29', '#302b63'], particleColors: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#FF9A8B'] },
-    { bg: ['#232526', '#414345'], particleColors: ['#FF4081', '#7C4DFF', '#18FFFF', '#64FFDA'] },
-    { bg: ['#141E30', '#243B55'], particleColors: ['#FF5252', '#FFD740', '#69F0AE', '#448AFF'] }
-];
-
 // =========== INITIALIZATION ===========
 function init() {
+    console.log("Initializing New Year Fireworks...");
     createStarBackground();
     setupEventListeners();
-    detectUserLocation();
+    updateLocalTime();
     updateWorldClocks();
     startCountdownTimer();
+    
+    // Set initial theme
+    updateTheme();
+    
+    // Start animation
     animate();
     
     // Start auto fireworks
     setInterval(() => {
-        if (autoFireworks && !megaShowActive) {
+        if (autoFireworks && !megaShowActive && fireworks.length < 20) {
             createRandomFirework();
         }
     }, 800);
+    
+    showMessage("🎉 Welcome to New Year 2026 Fireworks! Click anywhere to launch!");
 }
 
 // =========== BACKGROUND STARS ===========
 function createStarBackground() {
     const bg = document.getElementById('bgAnimation');
+    bg.innerHTML = '';
     for (let i = 0; i < 150; i++) {
         const star = document.createElement('div');
         star.className = 'star';
@@ -67,69 +102,57 @@ function createStarBackground() {
         star.style.left = `${Math.random() * 100}%`;
         star.style.top = `${Math.random() * 100}%`;
         star.style.animationDelay = `${Math.random() * 3}s`;
+        star.style.opacity = Math.random() * 0.5 + 0.2;
         bg.appendChild(star);
     }
 }
 
-// =========== USER LOCATION DETECTION ===========
-function detectUserLocation() {
-    // Try to get location from browser
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                try {
-                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
-                    const data = await response.json();
-                    userCountry = data.address.country || 'Unknown';
-                    document.getElementById('currentCountry').textContent = userCountry;
-                    
-                    // Set user timezone
-                    userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                    updateLocalTime();
-                } catch (error) {
-                    fallbackLocation();
-                }
-            },
-            () => fallbackLocation()
-        );
-    } else {
-        fallbackLocation();
+// =========== THEME SYSTEM ===========
+function updateTheme() {
+    const theme = themes[currentTheme];
+    
+    // Update body background
+    if (theme.bg.length === 2) {
+        document.body.style.background = `linear-gradient(135deg, ${theme.bg[0]} 0%, ${theme.bg[1]} 100%)`;
+    } else if (theme.bg.length === 3) {
+        document.body.style.background = `linear-gradient(135deg, ${theme.bg[0]} 0%, ${theme.bg[1]} 50%, ${theme.bg[2]} 100%)`;
     }
+    
+    showMessage(`Theme changed to: ${theme.name}`);
 }
 
-function fallbackLocation() {
-    // Fallback to IP-based location
-    fetch('https://ipapi.co/json/')
-        .then(response => response.json())
-        .then(data => {
-            userCountry = data.country_name || 'Unknown';
-            userTimeZone = data.timezone || 'UTC';
-            document.getElementById('currentCountry').textContent = userCountry;
-            updateLocalTime();
-        })
-        .catch(() => {
-            userCountry = 'Global';
-            userTimeZone = 'UTC';
-            document.getElementById('currentCountry').textContent = 'Global';
-            updateLocalTime();
-        });
-}
-
+// =========== TIME FUNCTIONS ===========
 function updateLocalTime() {
     const now = new Date();
-    const timeString = now.toLocaleTimeString('en-US', { timeZone: userTimeZone });
+    const timeString = now.toLocaleTimeString('en-US', { 
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
     document.getElementById('localTime').textContent = timeString;
     
-    // Check if it's midnight in user's location
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    
-    if (midnightMode && hours === 0 && minutes === 0) {
-        triggerMidnightFireworks();
+    // Check midnight mode
+    if (midnightMode) {
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        
+        // Check if it's exactly midnight (00:00:00)
+        if (hours === 0 && minutes === 0 && seconds === 0) {
+            triggerMidnightFireworks();
+        }
+        
+        // Check if it's 30 seconds before midnight
+        if (hours === 23 && minutes === 59 && seconds >= 30) {
+            triggerCountdownFireworks(60 - seconds);
+        }
     }
+    
+    // Update every second
+    setTimeout(updateLocalTime, 1000);
 }
 
-// =========== WORLD CLOCKS ===========
 function updateWorldClocks() {
     const worldClocks = document.getElementById('worldClocks');
     worldClocks.innerHTML = '';
@@ -139,58 +162,78 @@ function updateWorldClocks() {
     
     countries.forEach(country => {
         const now = new Date();
-        const timeString = now.toLocaleTimeString('en-US', { timeZone: country.timezone });
-        const dateString = now.toLocaleDateString('en-US', { 
-            timeZone: country.timezone,
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-        });
+        let timeString, dateString;
+        
+        try {
+            timeString = now.toLocaleTimeString('en-US', { 
+                timeZone: country.timezone,
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            dateString = now.toLocaleDateString('en-US', { 
+                timeZone: country.timezone,
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric'
+            });
+        } catch (e) {
+            timeString = "Error";
+            dateString = "";
+        }
         
         // Calculate time to midnight
-        const midnight = new Date(now.toLocaleString('en-US', { timeZone: country.timezone }));
-        midnight.setHours(24, 0, 0, 0);
-        const timeToMidnight = midnight.getTime() - now.getTime();
-        
-        // Check if this is the next midnight
-        if (timeToMidnight < minTimeToMidnight && timeToMidnight > 0) {
-            minTimeToMidnight = timeToMidnight;
-            nextCountry = country;
-            nextMidnightTime = midnight;
-        }
-        
-        // Create clock element
-        const clock = document.createElement('div');
-        clock.className = 'country-clock';
-        
-        // Check if it's active (within 10 minutes of midnight)
-        const hoursToMidnight = timeToMidnight / (1000 * 60 * 60);
-        if (hoursToMidnight < 0.5) {
-            clock.classList.add('active');
-            if (hoursToMidnight < 0.17) { // 10 minutes
-                clock.classList.add('next');
+        try {
+            const localTime = new Date(now.toLocaleString('en-US', { timeZone: country.timezone }));
+            const midnight = new Date(localTime);
+            midnight.setHours(24, 0, 0, 0);
+            const timeToMidnight = midnight.getTime() - localTime.getTime();
+            
+            // Check if this is the next midnight
+            if (timeToMidnight < minTimeToMidnight && timeToMidnight > 0) {
+                minTimeToMidnight = timeToMidnight;
+                nextCountry = country;
             }
+            
+            // Create clock element
+            const clock = document.createElement('div');
+            clock.className = 'country-clock';
+            
+            // Check if it's active (within 1 hour of midnight)
+            const hoursToMidnight = timeToMidnight / (1000 * 60 * 60);
+            if (hoursToMidnight < 1) {
+                clock.classList.add('active');
+                if (hoursToMidnight < 0.17) { // 10 minutes
+                    clock.classList.add('next');
+                }
+            }
+            
+            clock.innerHTML = `
+                <div class="flag">${country.flag}</div>
+                <div class="country-name">${country.name}</div>
+                <div class="city-name">${country.city}</div>
+                <div class="time-display">${timeString}</div>
+                <div class="date">${dateString}</div>
+                <div class="countdown ${hoursToMidnight < 1 ? 'soon' : ''}">
+                    ${formatTimeToMidnight(timeToMidnight)} to midnight
+                </div>
+            `;
+            
+            worldClocks.appendChild(clock);
+        } catch (e) {
+            console.log("Error calculating time for:", country.name);
         }
-        
-        clock.innerHTML = `
-            <div class="flag">${country.flag}</div>
-            <div class="country-name">${country.name}</div>
-            <div class="city-name">${country.city}</div>
-            <div class="time-display">${timeString}</div>
-            <div class="date">${dateString}</div>
-            <div class="countdown ${hoursToMidnight < 1 ? 'soon' : ''}">
-                ${formatTimeToMidnight(timeToMidnight)} to midnight
-            </div>
-        `;
-        
-        worldClocks.appendChild(clock);
     });
     
     // Update next midnight display
     if (nextCountry) {
-        nextMidnightCountry = nextCountry.name;
         document.getElementById('nextCountry').textContent = `${nextCountry.name} (${nextCountry.city})`;
     }
+    
+    // Update every 30 seconds
+    setTimeout(updateWorldClocks, 30000);
 }
 
 function formatTimeToMidnight(ms) {
@@ -210,9 +253,30 @@ function formatTimeToMidnight(ms) {
 // =========== COUNTDOWN TIMER ===========
 function startCountdownTimer() {
     setInterval(() => {
-        if (nextMidnightTime) {
+        // Find next midnight
+        let nextMidnight = null;
+        let minTime = Infinity;
+        
+        countries.forEach(country => {
+            try {
+                const now = new Date();
+                const localTime = new Date(now.toLocaleString('en-US', { timeZone: country.timezone }));
+                const midnight = new Date(localTime);
+                midnight.setHours(24, 0, 0, 0);
+                const timeDiff = midnight.getTime() - localTime.getTime();
+                
+                if (timeDiff < minTime && timeDiff > 0) {
+                    minTime = timeDiff;
+                    nextMidnight = midnight;
+                }
+            } catch (e) {
+                // Skip this country if error
+            }
+        });
+        
+        if (nextMidnight) {
             const now = new Date();
-            const timeDiff = nextMidnightTime.getTime() - now.getTime();
+            const timeDiff = nextMidnight.getTime() - now.getTime();
             
             const hours = Math.floor(timeDiff / (1000 * 60 * 60));
             const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
@@ -222,27 +286,27 @@ function startCountdownTimer() {
             document.getElementById('countdownMinutes').textContent = minutes.toString().padStart(2, '0');
             document.getElementById('countdownSeconds').textContent = seconds.toString().padStart(2, '0');
             
-            // Trigger fireworks when close to midnight
-            if (timeDiff < 10000 && timeDiff > 0 && !megaShowActive) {
-                triggerCountdownFireworks(10 - Math.floor(timeDiff / 1000));
+            // Trigger countdown fireworks
+            if (timeDiff < 11000 && timeDiff > 0 && !megaShowActive) {
+                const secondsLeft = 10 - Math.floor((10000 - timeDiff) / 1000);
+                if (secondsLeft > 0 && secondsLeft <= 10) {
+                    triggerCountdownFireworks(secondsLeft);
+                }
             }
         }
-        
-        updateLocalTime();
-        updateWorldClocks();
-    }, 1000);
+    }, 100);
 }
 
 // =========== FIREWORKS SYSTEM ===========
 class Firework {
-    constructor(x, y, targetX, targetY, color, type = 'normal') {
+    constructor(x, y, targetX, targetY, color, type = 'normal', size = 4) {
         this.x = x;
         this.y = y;
         this.startY = y;
         this.targetX = targetX;
         this.targetY = targetY;
         this.speed = 8 + Math.random() * 4;
-        this.size = 4;
+        this.size = size;
         this.color = color || this.getRandomColor();
         this.trail = [];
         this.exploded = false;
@@ -253,6 +317,12 @@ class Firework {
             y: -this.speed
         };
         this.sparkle = Math.random() > 0.5;
+        this.createdAt = Date.now();
+        
+        // Play launch sound
+        if (soundEnabled) {
+            playLaunchSound();
+        }
     }
 
     getRandomColor() {
@@ -274,13 +344,15 @@ class Firework {
             this.x += this.velocity.x;
             this.y += this.velocity.y;
             
-            // Check if reached target
+            // Check if reached target or timeout
             const distToTarget = Math.sqrt(
                 Math.pow(this.targetX - this.x, 2) + 
                 Math.pow(this.targetY - this.y, 2)
             );
             
-            if (distToTarget < 5 || this.y < this.targetY) {
+            const timeAlive = Date.now() - this.createdAt;
+            
+            if (distToTarget < 5 || this.y < this.targetY || timeAlive > 5000) {
                 this.explode();
             }
         }
@@ -336,7 +408,9 @@ class Firework {
         }
         
         // Play explosion sound
-        playExplosionSound();
+        if (soundEnabled) {
+            playExplosionSound();
+        }
     }
 }
 
@@ -380,9 +454,6 @@ class Particle {
     draw() {
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 1;
         
         if (this.type === 'heart') {
             this.drawHeart();
@@ -393,6 +464,7 @@ class Particle {
                 ctx.shadowColor = this.color;
             }
             
+            ctx.fillStyle = this.color;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
@@ -419,6 +491,7 @@ class Particle {
         ctx.scale(this.heartSize * 0.05, this.heartSize * 0.05);
         ctx.rotate(Math.PI);
         
+        ctx.fillStyle = this.color;
         ctx.beginPath();
         for (let i = 0; i < Math.PI * 2; i += 0.01) {
             const t = i;
@@ -450,10 +523,13 @@ function createRandomFirework() {
 }
 
 function triggerMidnightFireworks() {
+    if (megaShowActive) return;
+    
     megaShowActive = true;
+    showMessage("🎆 MIDNIGHT FIREWORKS SHOW! 🎇");
     
     // Big explosion in center
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 15; i++) {
         setTimeout(() => {
             const x = canvas.width / 2 + (Math.random() - 0.5) * 300;
             const y = canvas.height / 2 + (Math.random() - 0.5) * 200;
@@ -461,27 +537,33 @@ function triggerMidnightFireworks() {
                 canvas.width / 2, canvas.height,
                 x, y,
                 '#FFD700',
-                'heart'
+                Math.random() > 0.7 ? 'heart' : 'normal',
+                5
             ));
-        }, i * 100);
+        }, i * 150);
     }
     
     // Surrounding fireworks
     setTimeout(() => {
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 20; i++) {
             setTimeout(() => {
                 createRandomFirework();
-            }, i * 50);
+            }, i * 80);
         }
-    }, 2000);
+    }, 1000);
     
-    // End mega show after 10 seconds
+    // End mega show after 8 seconds
     setTimeout(() => {
         megaShowActive = false;
-    }, 10000);
+    }, 8000);
 }
 
 function triggerCountdownFireworks(secondsLeft) {
+    if (secondsLeft > 10 || secondsLeft <= 0) return;
+    
+    // Display countdown number
+    displayCountdownNumber(secondsLeft);
+    
     // Create countdown fireworks
     const x = canvas.width / 2;
     const y = canvas.height / 3;
@@ -490,12 +572,13 @@ function triggerCountdownFireworks(secondsLeft) {
         x, canvas.height,
         x, y,
         secondsLeft <= 3 ? '#FF0000' : '#FFFF00',
-        'normal'
+        'normal',
+        4
     ));
     
-    // Display countdown number
-    if (secondsLeft <= 10 && secondsLeft > 0) {
-        displayCountdownNumber(secondsLeft);
+    // Play countdown sound
+    if (soundEnabled && secondsLeft <= 10) {
+        playCountdownSound();
     }
 }
 
@@ -511,33 +594,41 @@ function displayCountdownNumber(number) {
     ctx.restore();
 }
 
+// =========== SOUND FUNCTIONS ===========
 function playExplosionSound() {
-    // Create Web Audio API sound
     try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
-        
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
-        
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.5);
+        explosionSound.currentTime = 0;
+        explosionSound.volume = 0.3;
+        explosionSound.play().catch(e => console.log("Audio play failed:", e));
     } catch (e) {
-        // Sound not supported
+        console.log("Explosion sound error:", e);
+    }
+}
+
+function playLaunchSound() {
+    try {
+        fireworkLaunchSound.currentTime = 0;
+        fireworkLaunchSound.volume = 0.2;
+        fireworkLaunchSound.play().catch(e => console.log("Audio play failed:", e));
+    } catch (e) {
+        console.log("Launch sound error:", e);
+    }
+}
+
+function playCountdownSound() {
+    try {
+        countdownSound.currentTime = 0;
+        countdownSound.volume = 0.4;
+        countdownSound.play().catch(e => console.log("Audio play failed:", e));
+    } catch (e) {
+        console.log("Countdown sound error:", e);
     }
 }
 
 // =========== ANIMATION LOOP ===========
 function animate() {
     // Clear with fade effect
-    ctx.fillStyle = `rgba(${themes[currentTheme].bg[0].slice(4, -1)}, 0.1)`;
+    ctx.fillStyle = `rgba(0, 4, 40, 0.1)`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Update and draw fireworks
@@ -558,7 +649,57 @@ function animate() {
     document.getElementById('activeFireworks').textContent = fireworks.length;
     document.getElementById('particleCount').textContent = particles.length;
     
-    requestAnimationFrame(animate);
+    animationId = requestAnimationFrame(animate);
+}
+
+// =========== UTILITY FUNCTIONS ===========
+function showMessage(text) {
+    // Create message element if it doesn't exist
+    let messageEl = document.getElementById('flashMessage');
+    if (!messageEl) {
+        messageEl = document.createElement('div');
+        messageEl.id = 'flashMessage';
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: #FFD700;
+            padding: 20px 40px;
+            border-radius: 20px;
+            font-size: 1.5rem;
+            z-index: 1000;
+            text-align: center;
+            border: 2px solid #FFD700;
+            box-shadow: 0 0 30px rgba(255,215,0,0.5);
+            animation: fadeInOut 2s ease-in-out;
+        `;
+        
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+                30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                70% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(messageEl);
+    }
+    
+    messageEl.textContent = text;
+    messageEl.style.display = 'block';
+    messageEl.style.animation = 'none';
+    setTimeout(() => {
+        messageEl.style.animation = 'fadeInOut 2s ease-in-out';
+        setTimeout(() => {
+            messageEl.style.display = 'none';
+        }, 2000);
+    }, 10);
 }
 
 // =========== PERSONAL MESSAGES ===========
@@ -591,6 +732,8 @@ function setupPersonalMessages() {
         for (let i = 0; i < 5; i++) {
             setTimeout(() => createRandomFirework(), i * 300);
         }
+        
+        showMessage(`Greeting created for ${recipient}!`);
     });
     
     shareBtn.addEventListener('click', () => {
@@ -602,6 +745,8 @@ function setupPersonalMessages() {
 
 // =========== EVENT LISTENERS ===========
 function setupEventListeners() {
+    console.log("Setting up event listeners...");
+    
     // Canvas click for manual fireworks
     canvas.addEventListener('click', (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -614,28 +759,58 @@ function setupEventListeners() {
             null,
             Math.random() > 0.7 ? 'heart' : 'normal'
         ));
+        
+        showMessage("🎇 Firework launched!");
     });
     
     // Control buttons
-    document.getElementById('megaShow').addEventListener('click', triggerMidnightFireworks);
+    const megaShowBtn = document.getElementById('megaShow');
+    const autoToggleBtn = document.getElementById('autoToggle');
+    const midnightModeBtn = document.getElementById('midnightMode');
+    const changeThemeBtn = document.getElementById('changeTheme');
+    const toggleSoundBtn = document.getElementById('toggleSound');
     
-    document.getElementById('autoToggle').addEventListener('click', function() {
+    // Mega Show button
+    megaShowBtn.addEventListener('click', () => {
+        triggerMidnightFireworks();
+        showMessage("💥 MEGA FIREWORKS SHOW ACTIVATED!");
+    });
+    
+    // Auto Fireworks toggle
+    autoToggleBtn.addEventListener('click', function() {
         autoFireworks = !autoFireworks;
+        this.classList.toggle('active');
         this.innerHTML = autoFireworks ? 
-            '<i class="fas fa-pause"></i> Pause Auto' : 
-            '<i class="fas fa-play"></i> Auto Fireworks';
+            '<i class="fas fa-pause"></i> Auto ON' : 
+            '<i class="fas fa-play"></i> Auto OFF';
+        showMessage(autoFireworks ? "Auto fireworks: ON" : "Auto fireworks: OFF");
     });
     
-    document.getElementById('midnightMode').addEventListener('click', function() {
+    // Midnight Mode toggle
+    midnightModeBtn.addEventListener('click', function() {
         midnightMode = !midnightMode;
+        this.classList.toggle('active');
         this.innerHTML = midnightMode ? 
-            '<i class="fas fa-moon"></i> Midnight Active' : 
-            '<i class="fas fa-clock"></i> Midnight Mode';
+            '<i class="fas fa-moon"></i> Midnight ON' : 
+            '<i class="fas fa-clock"></i> Midnight OFF';
+        showMessage(midnightMode ? "Midnight mode: ACTIVE" : "Midnight mode: OFF");
     });
     
-    document.getElementById('changeTheme').addEventListener('click', () => {
+    // Change Theme button
+    changeThemeBtn.addEventListener('click', function() {
         currentTheme = (currentTheme + 1) % themes.length;
-        document.body.style.background = `linear-gradient(135deg, ${themes[currentTheme].bg[0]} 0%, ${themes[currentTheme].bg[1]} 100%)`;
+        updateTheme();
+        this.innerHTML = `<i class="fas fa-palette"></i> ${themes[currentTheme].name}`;
+    });
+    
+    // Toggle Sound button
+    toggleSoundBtn.addEventListener('click', function() {
+        soundEnabled = !soundEnabled;
+        this.classList.toggle('active');
+        this.innerHTML = soundEnabled ? 
+            '<i class="fas fa-volume-up"></i> Sound ON' : 
+            '<i class="fas fa-volume-mute"></i> Sound OFF';
+        showMessage(soundEnabled ? "Sound: ON" : "Sound: OFF");
     });
     
     // Share buttons
@@ -652,32 +827,49 @@ function setupEventListeners() {
         tempCanvas.height = canvas.height;
         const tempCtx = tempCanvas.getContext('2d');
         
-        // Draw current frame
-        tempCtx.fillStyle = `linear-gradient(135deg, ${themes[currentTheme].bg[0]} 0%, ${themes[currentTheme].bg[1]} 100%)`;
+        // Draw background
+        const theme = themes[currentTheme];
+        if (theme.bg.length === 2) {
+            tempCtx.fillStyle = `linear-gradient(135deg, ${theme.bg[0]} 0%, ${theme.bg[1]} 100%)`;
+        } else {
+            tempCtx.fillStyle = `linear-gradient(135deg, ${theme.bg[0]} 0%, ${theme.bg[1]} 50%, ${theme.bg[2]} 100%)`;
+        }
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Draw current fireworks
         tempCtx.drawImage(canvas, 0, 0);
         
         // Add text
         tempCtx.font = 'bold 40px Montserrat';
         tempCtx.fillStyle = '#FFD700';
         tempCtx.textAlign = 'center';
+        tempCtx.shadowBlur = 10;
+        tempCtx.shadowColor = 'black';
         tempCtx.fillText('Happy New Year 2026!', tempCanvas.width/2, 50);
         
         // Convert to image and download
         const link = document.createElement('a');
-        link.download = 'new-year-2026-fireworks.png';
+        link.download = `new-year-fireworks-${Date.now()}.png`;
         link.href = tempCanvas.toDataURL('image/png');
         link.click();
+        
+        showMessage("📸 Moment captured and downloaded!");
     });
     
     // Window resize
     window.addEventListener('resize', () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        createStarBackground();
     });
     
     // Setup personal messages
     setupPersonalMessages();
+    
+    // Prevent context menu on canvas
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    console.log("Event listeners setup complete!");
 }
 
 // =========== START EVERYTHING ===========
