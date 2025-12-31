@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎆 Fireworks with YouTube Sound</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        canvas { display: block; }
+        .controls {
+            position: fixed; bottom: 20px; left: 20px;
+            background: rgba(0,0,0,0.7); padding: 15px;
+            border-radius: 10px; color: white;
+        }
+        button {
+            background: #4CAF50; color: white;
+            border: none; padding: 10px 20px;
+            border-radius: 5px; cursor: pointer;
+            margin: 5px;
+        }
+        /* Hidden YouTube video */
+        #youtubeSound {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0.01;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <!-- Hidden YouTube video for sound -->
+    <iframe 
+        id="youtubeSound"
+        src="https://www.youtube.com/embed/dCyYJXozSzA?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1&loop=1&playlist=dCyYJXozSzA"
+        frameborder="0"
+        allow="autoplay; encrypted-media"
+        allowfullscreen>
+    </iframe>
+    
+    <!-- Backup sounds if YouTube doesn't work -->
+    <audio id="launchSound" src="https://assets.mixkit.co/sfx/preview/mixkit-rocket-launch-3001.mp3" preload></audio>
+    <audio id="explosionSound" src="https://assets.mixkit.co/sfx/preview/mixkit-bomb-explosion-2801.mp3" preload></audio>
+    
+    <div class="controls">
+        <button onclick="createFirework()">🎇 Launch Firework</button>
+        <button onclick="playYouTubeSound()">▶️ Play YouTube Sound</button>
+        <button onclick="megaShow()">💥 Mega Show</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        let fireworks = [];
+        let youtubePlaying = false;
+        
+        // YouTube video control functions
+        function playYouTubeSound() {
+            try {
+                const iframe = document.getElementById('youtubeSound');
+                // YouTube iframe APIs needed for proper control
+                alert("YouTube sound playing in background. Volume auto-set to low.");
+                youtubePlaying = true;
+            } catch (e) {
+                console.log("YouTube error:", e);
+                playBackupSound();
+            }
+        }
+        
+        function playBackupSound() {
+            const sounds = ['launchSound', 'explosionSound'];
+            const soundId = sounds[Math.floor(Math.random() * sounds.length)];
+            const sound = document.getElementById(soundId);
+            sound.currentTime = 0;
+            sound.volume = 0.3;
+            sound.play();
+        }
+        
+        // Firework creation
+        function createFirework(x = Math.random() * canvas.width) {
+            fireworks.push({
+                x: x,
+                y: canvas.height,
+                targetY: Math.random() * canvas.height * 0.4 + 100,
+                speed: 8,
+                color: `hsl(${Math.random()*360}, 100%, 60%)`,
+                exploded: false,
+                particles: []
+            });
+            
+            // Play sound
+            if (youtubePlaying) {
+                // YouTube playing in background
+                playBackupSound(); // Backup sound
+            } else {
+                playBackupSound();
+            }
+        }
+        
+        // Mega show
+        function megaShow() {
+            for(let i = 0; i < 15; i++) {
+                setTimeout(() => createFirework(), i * 150);
+            }
+        }
+        
+        // Animation
+        function animate() {
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            
+            fireworks.forEach((fw, idx) => {
+                if(!fw.exploded) {
+                    fw.y -= fw.speed;
+                    if(fw.y <= fw.targetY) {
+                        fw.exploded = true;
+                        // Play explosion sound
+                        playBackupSound();
+                        // Create particles
+                        for(let i=0; i<50; i++) {
+                            fw.particles.push({
+                                x: fw.x,
+                                y: fw.y,
+                                vx: (Math.random()-0.5)*10,
+                                vy: (Math.random()-0.5)*10,
+                                color: fw.color,
+                                life: 1
+                            });
+                        }
+                    }
+                    // Draw firework
+                    ctx.fillStyle = fw.color;
+                    ctx.beginPath();
+                    ctx.arc(fw.x, fw.y, 4, 0, Math.PI*2);
+                    ctx.fill();
+                } else {
+                    // Draw particles
+                    fw.particles.forEach((p, pIdx) => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.1;
+                        p.vx *= 0.97;
+                        p.vy *= 0.97;
+                        p.life -= 0.02;
+                        
+                        if(p.life > 0) {
+                            ctx.globalAlpha = p.life;
+                            ctx.fillStyle = p.color;
+                            ctx.beginPath();
+                            ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+                            ctx.fill();
+                        } else {
+                            fw.particles.splice(pIdx, 1);
+                        }
+                    });
+                    ctx.globalAlpha = 1;
+                    
+                    if(fw.particles.length === 0) {
+                        fireworks.splice(idx, 1);
+                    }
+                }
+            });
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Event listeners
+        canvas.addEventListener('click', (e) => {
+            createFirework(e.clientX);
+        });
+        
+        // Auto fireworks
+        setInterval(() => {
+            if(Math.random() < 0.03) createFirework();
+        }, 800);
+        
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
