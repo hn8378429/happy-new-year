@@ -11,6 +11,7 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     position: relative;
+    transition: background 0.5s ease;
 }
 
 /* Animated Background */
@@ -389,6 +390,10 @@ body {
     background: linear-gradient(45deg, #FF1493, #FF69B4);
 }
 
+.control-btn.active {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
 /* Fireworks Display */
 .fireworks-info {
     position: fixed;
@@ -469,7 +474,7 @@ body {
     .year-display { font-size: 5rem; }
     .countdown-unit { min-width: 80px; padding: 15px 10px; }
     .countdown-value { font-size: 2.5rem; }
-    .controls { bottom: 20px; padding: 15px; }
+    .controls { bottom: 20px; padding: 15px; flex-direction: column; }
     .control-btn { padding: 10px 15px; font-size: 0.9rem; }
     .fireworks-info, .share-section {
         position: static;
