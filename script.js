@@ -380,4 +380,305 @@ class Particle {
     draw() {
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = this
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 1;
+        
+        if (this.type === 'heart') {
+            this.drawHeart();
+        } else {
+            // Sparkle effect
+            if (this.sparkle && Math.random() > 0.7) {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+            }
+            
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Glow effect
+        ctx.beginPath();
+        const gradient = ctx.createRadialGradient(
+            this.x, this.y, 0,
+            this.x, this.y, this.size * 4
+        );
+        gradient.addColorStop(0, this.color.replace(')', ', 0.3)').replace('rgb', 'rgba'));
+        gradient.addColorStop(1, this.color.replace(')', ', 0)').replace('rgb', 'rgba'));
+        ctx.fillStyle = gradient;
+        ctx.arc(this.x, this.y, this.size * 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    drawHeart() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.heartSize * 0.05, this.heartSize * 0.05);
+        ctx.rotate(Math.PI);
+        
+        ctx.beginPath();
+        for (let i = 0; i < Math.PI * 2; i += 0.01) {
+            const t = i;
+            const px = 16 * Math.pow(Math.sin(t), 3);
+            const py = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+            ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+    }
+}
+
+// =========== FIREWORK CONTROLS ===========
+function createRandomFirework() {
+    const x = Math.random() * canvas.width;
+    const y = canvas.height;
+    const targetY = Math.random() * canvas.height * 0.4 + 100;
+    const types = ['normal', 'heart', 'normal', 'normal'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    
+    fireworks.push(new Firework(
+        x, y,
+        x, targetY,
+        null,
+        type
+    ));
+}
+
+function triggerMidnightFireworks() {
+    megaShowActive = true;
+    
+    // Big explosion in center
+    for (let i = 0; i < 20; i++) {
+        setTimeout(() => {
+            const x = canvas.width / 2 + (Math.random() - 0.5) * 300;
+            const y = canvas.height / 2 + (Math.random() - 0.5) * 200;
+            fireworks.push(new Firework(
+                canvas.width / 2, canvas.height,
+                x, y,
+                '#FFD700',
+                'heart'
+            ));
+        }, i * 100);
+    }
+    
+    // Surrounding fireworks
+    setTimeout(() => {
+        for (let i = 0; i < 30; i++) {
+            setTimeout(() => {
+                createRandomFirework();
+            }, i * 50);
+        }
+    }, 2000);
+    
+    // End mega show after 10 seconds
+    setTimeout(() => {
+        megaShowActive = false;
+    }, 10000);
+}
+
+function triggerCountdownFireworks(secondsLeft) {
+    // Create countdown fireworks
+    const x = canvas.width / 2;
+    const y = canvas.height / 3;
+    
+    fireworks.push(new Firework(
+        x, canvas.height,
+        x, y,
+        secondsLeft <= 3 ? '#FF0000' : '#FFFF00',
+        'normal'
+    ));
+    
+    // Display countdown number
+    if (secondsLeft <= 10 && secondsLeft > 0) {
+        displayCountdownNumber(secondsLeft);
+    }
+}
+
+function displayCountdownNumber(number) {
+    ctx.save();
+    ctx.font = 'bold 200px Montserrat';
+    ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + (10 - number) * 0.07})`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = '#FFD700';
+    ctx.fillText(number, canvas.width / 2, canvas.height / 2);
+    ctx.restore();
+}
+
+function playExplosionSound() {
+    // Create Web Audio API sound
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+        
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (e) {
+        // Sound not supported
+    }
+}
+
+// =========== ANIMATION LOOP ===========
+function animate() {
+    // Clear with fade effect
+    ctx.fillStyle = `rgba(${themes[currentTheme].bg[0].slice(4, -1)}, 0.1)`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Update and draw fireworks
+    fireworks.forEach((fw, index) => {
+        fw.update();
+        fw.draw();
+        
+        if (fw.exploded) {
+            fireworks.splice(index, 1);
+        }
+    });
+    
+    // Update and draw particles
+    particles = particles.filter(p => p.update());
+    particles.forEach(p => p.draw());
+    
+    // Update stats
+    document.getElementById('activeFireworks').textContent = fireworks.length;
+    document.getElementById('particleCount').textContent = particles.length;
+    
+    requestAnimationFrame(animate);
+}
+
+// =========== PERSONAL MESSAGES ===========
+function setupPersonalMessages() {
+    const createBtn = document.getElementById('createGreeting');
+    const shareBtn = document.getElementById('shareGreeting');
+    const display = document.getElementById('greetingDisplay');
+    const greetingText = document.getElementById('greetingText');
+    const senderDisplay = document.getElementById('displaySender');
+    
+    createBtn.addEventListener('click', () => {
+        const sender = document.getElementById('senderName').value.trim() || 'A Friend';
+        const recipient = document.getElementById('recipientName').value.trim() || 'You';
+        
+        const greetings = [
+            `Happy New Year 2026, ${recipient}! 🎉 May this year bring you endless joy and success!`,
+            `Wishing ${recipient} a spectacular 2026! ✨ May all your dreams take flight!`,
+            `To ${recipient}, may 2026 be your best year yet! Full of love, laughter, and prosperity! 🌟`,
+            `New Year, New Beginnings! ${recipient}, may 2026 shower you with blessings! 🎊`,
+            `Cheers to 2026, ${recipient}! 🥂 May every moment be as bright as these fireworks!`
+        ];
+        
+        const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+        
+        greetingText.textContent = randomGreeting;
+        senderDisplay.textContent = sender;
+        display.style.display = 'block';
+        
+        // Trigger celebration fireworks
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => createRandomFirework(), i * 300);
+        }
+    });
+    
+    shareBtn.addEventListener('click', () => {
+        const text = `${greetingText.textContent}\n\nFrom: ${senderDisplay.textContent}\n\nShare the celebration: ${window.location.href}`;
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+    });
+}
+
+// =========== EVENT LISTENERS ===========
+function setupEventListeners() {
+    // Canvas click for manual fireworks
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        fireworks.push(new Firework(
+            x, canvas.height,
+            x, y,
+            null,
+            Math.random() > 0.7 ? 'heart' : 'normal'
+        ));
+    });
+    
+    // Control buttons
+    document.getElementById('megaShow').addEventListener('click', triggerMidnightFireworks);
+    
+    document.getElementById('autoToggle').addEventListener('click', function() {
+        autoFireworks = !autoFireworks;
+        this.innerHTML = autoFireworks ? 
+            '<i class="fas fa-pause"></i> Pause Auto' : 
+            '<i class="fas fa-play"></i> Auto Fireworks';
+    });
+    
+    document.getElementById('midnightMode').addEventListener('click', function() {
+        midnightMode = !midnightMode;
+        this.innerHTML = midnightMode ? 
+            '<i class="fas fa-moon"></i> Midnight Active' : 
+            '<i class="fas fa-clock"></i> Midnight Mode';
+    });
+    
+    document.getElementById('changeTheme').addEventListener('click', () => {
+        currentTheme = (currentTheme + 1) % themes.length;
+        document.body.style.background = `linear-gradient(135deg, ${themes[currentTheme].bg[0]} 0%, ${themes[currentTheme].bg[1]} 100%)`;
+    });
+    
+    // Share buttons
+    document.getElementById('sharePage').addEventListener('click', () => {
+        const text = `🎆 Join me in celebrating New Year 2026 with this amazing fireworks show! ${window.location.href}`;
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+    });
+    
+    document.getElementById('captureMoment').addEventListener('click', () => {
+        // Create a temporary canvas to capture current frame
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Draw current frame
+        tempCtx.fillStyle = `linear-gradient(135deg, ${themes[currentTheme].bg[0]} 0%, ${themes[currentTheme].bg[1]} 100%)`;
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(canvas, 0, 0);
+        
+        // Add text
+        tempCtx.font = 'bold 40px Montserrat';
+        tempCtx.fillStyle = '#FFD700';
+        tempCtx.textAlign = 'center';
+        tempCtx.fillText('Happy New Year 2026!', tempCanvas.width/2, 50);
+        
+        // Convert to image and download
+        const link = document.createElement('a');
+        link.download = 'new-year-2026-fireworks.png';
+        link.href = tempCanvas.toDataURL('image/png');
+        link.click();
+    });
+    
+    // Window resize
+    window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+    
+    // Setup personal messages
+    setupPersonalMessages();
+}
+
+// =========== START EVERYTHING ===========
+window.addEventListener('load', init);
